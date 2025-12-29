@@ -1,0 +1,129 @@
+# -------------------
+# 1. Postgres Database
+# -------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spree-db
+  namespace: dev
+spec:
+  selector:
+    matchLabels:
+      app: spree-db
+  template:
+    metadata:
+      labels:
+        app: spree-db
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:14
+        env:
+        - name: POSTGRES_USER
+          value: spree
+        - name: POSTGRES_PASSWORD
+          value: password
+        ports:
+        - containerPort: 5432
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: db  # This name allows the app to connect using host "db"
+  namespace: dev
+spec:
+  ports:
+  - port: 5432
+  selector:
+    app: spree-db
+
+---
+# -------------------
+# 2. Redis Cache
+# -------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spree-redis
+  namespace: dev
+spec:
+  selector:
+    matchLabels:
+      app: spree-redis
+  template:
+    metadata:
+      labels:
+        app: spree-redis
+    spec:
+      containers:
+      - name: redis
+        image: redis:alpine
+        ports:
+        - containerPort: 6379
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: dev
+spec:
+  ports:
+  - port: 6379
+  selector:
+    app: spree-redis
+
+---
+# -------------------
+# 3. Spree Web App
+# -------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spree-web
+  namespace: dev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: spree-web
+  template:
+    metadata:
+      labels:
+        app: spree-web
+    spec:
+      containers:
+      - name: spree-web
+        # Jenkins will replace 'latest' with the build number automatically
+        image: zakariamestour/spree-starter:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3000
+        env:
+        - name: RAILS_ENV
+          value: development
+        - name: POSTGRES_USER
+          value: spree
+        - name: POSTGRES_PASSWORD
+          value: password
+        # Connects to the 'db' service defined above
+        - name: DATABASE_URL
+          value: postgres://spree:password@db:5432/spree_starter_development
+        # Connects to the 'redis' service defined above
+        - name: REDIS_URL
+          value: redis://redis:6379/1
+        - name: RAILS_SERVE_STATIC_FILES
+          value: "true"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: spree-web
+  namespace: dev
+spec:
+  type: NodePort 
+  ports:
+  - port: 3000
+    targetPort: 3000
+    nodePort: 30007 # Access app at http://localhost:30007
+  selector:
+    app: spree-web
