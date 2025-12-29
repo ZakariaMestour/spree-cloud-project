@@ -5,35 +5,27 @@ set -e
 rm -f /app/tmp/pids/server.pid
 
 # Wait for Database
-echo "Waiting for Database to become available..."
+echo "Waiting for Database host 'db'..."
 until PGPASSWORD=$POSTGRES_PASSWORD psql -h "db" -U "$POSTGRES_USER" -c '\q'; do
   >&2 echo "Postgres is unavailable - sleeping"
   sleep 1
 done
 echo "Database is up."
 
-# Install JavaScript dependencies (Critical for styles)
-echo "Checking JavaScript dependencies..."
-yarn install
-
-# Build the Tailwind CSS (This fixes the MissingAssetError)
-echo "Building Tailwind CSS..."
-bin/rails tailwindcss:build
-
-# Prepare Database
-echo "Preparing database..."
+# Migrate Database (Fast)
+echo "Checking database..."
 bin/rails db:prepare
 
-# Check if admin user exists (Fixed: Use Spree::User instead of User)
+# Check if admin user exists
 if bin/rails runner "exit Spree::User.exists?(email: 'admin@spree.com') ? 0 : 1"; then
-    echo "Existing data found. Skipping seeding."
+    echo "Skipping seeding (Data exists)."
 else
-    echo "No admin user found. Seeding database..."
+    echo "Seeding database..."
     bin/rails db:seed
     bin/rails spree_sample:load
     echo "Seeding finished!"
 fi
 
-# Explicitly start the server
+# Start Server
 echo "Starting Spree Server..."
-exec rails server -b 0.0.0.0
+exec "$@"
